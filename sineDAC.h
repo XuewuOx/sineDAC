@@ -21,25 +21,25 @@
 #endif
 
 #if defined(_16F87) || defined(_16F88)
-	#define RX_PIN TRISB2
-	#define TX_PIN TRISB5
+   #define RX_PIN TRISB2
+   #define TX_PIN TRISB5
 #else
-	#define RX_PIN TRISC7
-	#define TX_PIN TRISC6
+   #define RX_PIN TRISC7
+   #define TX_PIN TRISC6
 #endif
 
 /* Serial initialization */
 #define init_comms()\
-	RX_PIN = 1;	\
-	TX_PIN = 1;		  \
-	SPBRG = DIVIDER;     	\
-	RCSTA = (NINE_BITS|0x90);	\
-	TXSTA = (SPEED|NINE_BITS|0x20)
+   RX_PIN = 1;   \
+   TX_PIN = 1;        \
+   SPBRG = DIVIDER;        \
+   RCSTA = (NINE_BITS|0x90);   \
+   TXSTA = (SPEED|NINE_BITS|0x20)
 
 void putch(unsigned char);
 unsigned char getch(void);
 unsigned char getche(void);
-
+unsigned char getch_timeout(void);
 
 
 

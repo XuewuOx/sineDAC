@@ -1,7 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <pic.h>
+#include	<conio.h>
+#include	<ctype.h>
+
 #include "sineDAC.h"
+// #include	"always.h"
+// #include	"delay.h"
+// #include	"maths.h"
 
 #define TRUE 1
 
@@ -28,10 +34,11 @@ const unsigned int sine_wave[32] = {81,162,241,318,392,462,527,588,642,
 691,733,768,795,815,827,831,827,815,795,768,733,691,642,588,527,462,392,318,241,162,81,0};
 
 #define sINI 0
-#define sWaitCmd 1
-#define sProcCmd 2
-#define sGenSine 3
+#define sIDLE 1
+#define sGENSINE 2
+#define sRXDACTABLE 3
 
+unsigned char delayus_variable;
 
 unsigned int mainStatus =0; // main status
  // 0 for initialization
@@ -89,7 +96,7 @@ void setup_ports(void)
  PSPMODE = 0;     // set this or PORTD only read at power on or reset!
 }
 
-
+/*
 void write_to_leds(led_pattern)
 unsigned char led_pattern;
 {
@@ -100,7 +107,7 @@ unsigned char read_switches(void)
 {
  return PORTD;
 }
-
+*/
 
 
 void setup_SPI(void)
@@ -147,6 +154,7 @@ void setup_A2D(void)
 }				// A2D AN0 External 2.5 volt reference to AN3, AN2 is ref low.
 				// ADCS2=0
 
+/* 
 //
 void setup_pwm_frequency(void)	// with 4MHz crystal ie 25uS ........
 {								// PWM Hz = 1/ [(PR2+1) * 4 * 25uS * PrescaleValue]
@@ -186,6 +194,7 @@ void set_pwm2_width(void)		// Alter markspace ration of chosen frequency PWM sig
  CCP2CON = 0x3C; 		// turn second pwm on and width 10 bit value D1 and D0
  CCPR2L = pwm2_value;;			// width D9-D2
 }
+*/
 
 //
 
@@ -210,13 +219,7 @@ void read_A2D(void)
  voltage = A2D_reading;
  printf("\rInput voltage is %umV \n\n\n\r",A2D_display);
 }
-/*
-void display_options(void)
-{
-// printf("d'xxxx' adjust DAC output 0- 4095 [16 bits]\r\n a read ADC\r\n i read O\r\n o'xxx' <CR> write 'xxx' to IO 0-255\r\n\n");
-// printf("or s for last known I/O status\r\n");
-}
-*/
+
 
 void display_DAC_voltage(void)
 {
@@ -239,46 +242,37 @@ void print_status(void)
 }
 */
 //----------------------------------
-unsigned int processCmd(void)
+unsigned char processCmd(void)
 {
-unsigned int nextStatus; 
+	// return the cmdType
+	// if a command string is uncompleted, set cmdType=0 (No cmd received)
+unsigned char cmdType;
+
 switch (command[0])
 		{
 		 case 0x64: //d
-			//printf("\n\rAdjusting DAC\r\n");
-			DAC_read_data[0] = command[1];
-			DAC_read_data[1] = command[2];
-			DAC_read_data[2] = command[3];
-			DAC_read_data[3] = command[4];
-		    DAC_value = atoi(DAC_read_data);
+			 if (command_index==5) // 'dxxxx'
+			 { // all 5 char received in the format of 'dxxxx'
+				 //printf("\n\rAdjusting DAC\r\n");
+	 		//	printf("received cmd %c %d\r\n", command[0], command[0]);
+                DAC_read_data[0] = command[1];
+	 			DAC_read_data[1] = command[2];
+				DAC_read_data[2] = command[3];
+				DAC_read_data[3] = command[4];
+				DAC_value = atoi(DAC_read_data);
 				if(DAC_value >4095)
-					{
-					 DAC_value = 4095;
-					 printf("\r\nDAC data input range is 0 to 4095\r\n");
-					} 
-
-
-
-		// temp = DAC_value; // 
-		/*	
-temp=sine_wave[indSine++];
-printf(" sine[%d]=%d\r\n", indSine,temp);
-DAC_value=temp;
-display_DAC_voltage();
-if (indSine>=31) 
-	indSine=0;
-			temp = temp >>8;				// coz cast uses lower 8 bits of 16
-			DAC_hi = (unsigned char) temp; 
-			temp = DAC_value;
-			DAC_lo = (unsigned int) DAC_value;				 
-			write_SPI_word(DAC_hi,DAC_lo);
-*/
-			command_index = 0;
-			nextStatus=sWaitCmd;
-
+				 {
+				  DAC_value = 4095;
+				  printf("\r\nDAC data input range is 0 to 4095\r\n");
+				}
+			 	command_index = 0;
+			 	cmdType=0x64;
+			 }
+			 else
+			 {cmdType=0;
+				 }
 			break;
 		      
-
 	/*	 case 0x69: //i
 			//printf("\rReading switches\r\n");
 			switch_value = read_switches();
@@ -304,19 +298,19 @@ if (indSine>=31)
 			break;
     */
 		 case 0x61:	//a
-			read_A2D();
-			nextStatus=sWaitCmd;
+			// read_A2D();
 			command_index = 0;
+			cmdType=0x61;
 			break;
 
 		 case 0x73: //s, start
-			nextStatus=sGenSine;			
+			cmdType=0x73;
 			command_index = 0;
 			break;
         
         case 0x74: //t, stop
 			// print_status();
-			nextStatus=sWaitCmd;			
+        	cmdType=0x74;
 			command_index = 0;
 			break;
 
@@ -325,16 +319,19 @@ if (indSine>=31)
 			// printf("\r\nOptions are ........\n\r");
 			// display_options();
 			//printf("\r\n d'xxxx' adjust DAC output 0-4095 [16 bits]\r\n a read ADC\r\n i read IO\r\n o'xxx' <CR> write 'xxx' to IO 0-255\r\n\n");
-			nextStatus=sWaitCmd;			
+			cmdType=0;
 			command_index = 0;
 			break;
 		}
-return nextStatus;
+return cmdType;
 }
 
 //------------------------------
 void main(void)
-{	unsigned char input;
+{	unsigned char input, getch_timeout_temp;
+    unsigned char cmdType;
+
+	mainStatus=sINI; // 0
 	indSine=0;
 	INTCON=0;	// purpose of disabling the interrupts.
 	init_comms();	// set up the USART - settings defined in usart.h
@@ -344,9 +341,9 @@ void main(void)
 	//
 	pwm1_value = 0x1F; // 25% on                                	0x19 ~20%
     pwm2_value = 0x5D; // 75% on
-	setup_pwm_frequency();
-	set_pwm1_width();
-	set_pwm2_width();
+	// setup_pwm_frequency();
+	// set_pwm1_width();
+	// set_pwm2_width();
 	//
 	DAC_value = 0;
 	LSB = 2.441406;
@@ -361,48 +358,64 @@ void main(void)
 	// printf("\r\RS232 serial comms 9600 no parity Xon Xoff \r\n");
 	// printf("\r\Two channels of PWM control currently at 25 and 75 percent ON\r\n "); 
 	//printf("\rPWMs set at 25 and 75 percent ON\r\n");       
-	printf("\r\n sine Generator Jez Bowles 2008\r\n");
+	printf("\r\n non-blocking RS232, sine Generator Jez Bowles 2008\r\n");
 	// display_options();
-    mainStatus=1;
+
+	mainStatus=sIDLE; // 1;
 while(TRUE)
    {	
+	  // getch_timeout_temp=getch_timeout();
+		if (RCIF)
+			{
+				getch_timeout_temp=RCREG;
+				// a char is received
+				command[command_index] = getch_timeout_temp;
+				printf("%c",command[command_index]);	// echo it back
+				command_index++;
+				cmdType=processCmd();
+				      	   // printf("\r\ncmdType=%c, %d ", cmdType, cmdType);
+			}
+		else // no char is received
+		{
+		    cmdType=0;
+		}
 
        switch (mainStatus)
-		{ case 1: // Idle, watiting for command
-   		 		while(command_index <=4)	// was 3 .... 0,1,2,3
-    			{
-			 	input = getch();	// read a response from the user
-			 	command[command_index] = input;
-			 	printf("%c",command[command_index]);	// echo it back
-			 	command_index++;
-                // 0x69, read switches request
-				// 0x61, A2D request 
-				// 0x73, 's' status request
-				// 0x74, 't' status request
-			 	if(command[0] == 0x69 || command[0] == 0x61 || command[0] == 0x73 ||command[0] == 0x74) 
-					command_index=5; // jump out no parameters needed}
-			    }
-                mainStatus=2;
+		{  case 0:
+				command_index=0;
+				mainStatus=sIDLE;
 				break;
-		case sProcCmd: //2, a command has received, process the command
-				mainStatus=processCmd();
+           case sIDLE: // 1, Idle, watiting for command
+        	    if (cmdType=='s')
+        	    { // start generating sinewave
+        	      // simply set mainStatus=sGENSINE
+        	    	printf("\r\nreceived cmd s. Start sine wave \r\n");
+        	     mainStatus=sGENSINE;
+        	     }
+        	    break;
+
+           case sGENSINE: //2,
+        	   temp=sine_wave[indSine++];
+        	   // printf(" %d\r\n",temp);
+        	   DAC_value=temp;
+				// display_DAC_voltage();
+				if (indSine>=31)
+					indSine=0;
+				temp = temp >>8;// coz cast uses lower 8 bits of 16
+				DAC_hi = (unsigned char) temp;
+				temp = DAC_value;
+				DAC_lo = (unsigned int) DAC_value;
+				write_SPI_word(DAC_hi,DAC_lo);
+
+				if (cmdType=='t')
+				{ // stop cmd, simply set the mainStatus to sIDLE
+        	    	printf("\r\nreceived cmd t. Stop sine wave \r\n");
+					mainStatus=sIDLE;
+				}
 				break;
-		case sGenSine:
-        	temp=sine_wave[indSine++];
-			printf(" sine[%d]=%d\r\n", indSine,temp);
-			DAC_value=temp;
-			// display_DAC_voltage();
-			if (indSine>=31) 
-				indSine=0;
-			temp = temp >>8;// coz cast uses lower 8 bits of 16
-			DAC_hi = (unsigned char) temp; 
-			temp = DAC_value;
-			DAC_lo = (unsigned int) DAC_value;				 
-			write_SPI_word(DAC_hi,DAC_lo);
-			break;
 		
 		default: // a command has received, process the command
- 				mainStatus=1;
+ 				mainStatus=sIDLE;
 				break;
 
 	 	}
