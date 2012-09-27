@@ -36,8 +36,8 @@ DelayUs(255); //max
 #define __DELAY_H
 
 #define	PIC_CLK 4000000 //change this to 3.6864, 4, 16 or 20MHz
-
-extern delayus_variable;
+extern unsigned char delayus_variable;
+// unsigned char delayus_variable;
 
 #if (PIC_CLK == 4000000) || (PIC_CLK == 3686400) //3686400 is not entirely accurate, but it works
 	#define dly125n please remove; for 32Mhz+ only
@@ -155,4 +155,5 @@ To use:		//for max 491512us, half sec timeout @ 8Mhz
 #define LOOP_CYCLES_INT		16							//how many cycles per loop, optimizations on
 #define timeout_int_us(x)	(unsigned int)((x/LOOP_CYCLES_INT)*(PIC_CLK/4000000.0))
 
+void DelayBigMs(unsigned int cnt);
 #endif
