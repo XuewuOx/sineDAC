@@ -5,13 +5,13 @@
 #include	<ctype.h>
 #include "math.h"
 
-#include "sineDAC.h"
-#include "delay.h"
+ #include "sineDAC.h"
+// #include "delay.h"
 
 // #include	"always.h"
 // #include	"delay.h"
 // #include	"maths.h"
-#include  "eeprom.c"
+ #include  "eeprom.c"
 // #include  "eep_init.c"
 
 /*
@@ -120,12 +120,15 @@ void setup_ports(void)
  PORTB = 0;				// Initialise ports
  PORTD = 0;
  PORTE = 0;
- PORTC = 0;
+ PORTC = 0x02; // set RC1=1 to disable the sine wave when reset
 
  TRISB = 0;				// Port B as outputs
  TRISD = 0xFF;			// Port D as input
  TRISE = 0xFE;
- TRISC = 0x90;
+ TRISC = 0x91;  // RX/RC7=1, TX/RC6=0, SDO/RC5=0, SDI/RC4=1
+ // TRISC0=1; // 1 input
+ // TRISC1=0; // 0 output
+ // RC1=1;
  PSPMODE = 0;     // set this or PORTD only read at power on or reset!
 }
 
@@ -170,7 +173,7 @@ switch (command[0])
 				if(DAC_value >4095)
 				 {
 				  DAC_value = 4095;
-				  printf("\r\nlimit DAC input to 4095 ");
+				  printf("\r\nlimit DAC to 4095");
 				}
 			 	command_index = 0;
 			 	cmdType=0x64;
@@ -429,7 +432,7 @@ void main(void)
 
 	printf("\r\n");
 */
-	DelayBigMs(1000);
+	// DelayBigMs(1000);
 	PORTB=0x80;
 
 
@@ -456,7 +459,7 @@ void main(void)
 	// printf("\r\RS232 serial comms 9600 no parity Xon Xoff \r\n");
 	// printf("\r\Two channels of PWM control currently at 25 and 75 percent ON\r\n "); 
 	//printf("\rPWMs set at 25 and 75 percent ON\r\n");       
-	 printf("\r\n sine Generator by X.Dai, J.Bowles\r\n");
+	 printf("\r\n sine Generator by X.Dai, J.Bowles v2\r\n");
 printf("Command format \r\n");
 printf("s## = start sine wave with amplitude ## percentage of full sacle\r\n");
 // printf("t = stopt sine wave \r\n");
@@ -468,7 +471,7 @@ printf("s## = start sine wave with amplitude ## percentage of full sacle\r\n");
 	init_interrupt();
 	mainStatus=sIDLE; // 1;
 while(TRUE)
-   {	
+   {	RC1=!RC0; // use RC0 to control the sine on/off in sGENSINE
 	  // getch_timeout_temp=getch_timeout();
 		if (RCIF)
 			{
@@ -496,6 +499,7 @@ while(TRUE)
         	    { // start generating sinewave
         	      // simply set mainStatus=sGENSINE
         	    //	printf("\r\nreceived cmd s%d. Start sine wave ... ", sineamp);
+					RC1=0;
 					switch (sineamp)
 					{	case 0:
 							for (i=0;i<NSAMPLES;i++)
@@ -542,7 +546,7 @@ i=eeromaddr_sinefrq;
         	   // printf("\r\nc=%d", nSineCycles);
         	   break;
            case sGENSINE: //2,
-				 RB6=0x01;
+				 RC1=!RC0; // use RC0 to control the sine on/off in sGENSINE
           // DAC_value= sinewave[indSine];// coz cast uses lower 8 bits of 16
      /*     DAC_value=eeprom_read_int((unsigned char)indSine*2);
  						DAC_hi=(unsigned char) (DAC_value>>8);
@@ -581,6 +585,7 @@ i=eeromaddr_sinefrq;
 				{ // stop cmd, simply set the mainStatus to sIDLE
         	      //	printf("\r\nreceived cmd t. Stop sine wave \r\n");
                    // mainStatus=sGENSINE;
+				   RC1=1;
         	       nSineCycles=1;
   				   RB6=0x0;
                    mainStatus=sSLOWSTOP_SINE;
