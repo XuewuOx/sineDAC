@@ -96,6 +96,7 @@ const unsigned int sinewave25[32]={612,709,797,875,939,986,1015,1025,
 #define sRXDACTABLE 3
 #define sSLOWSTART_SINE 4
 #define sSLOWSTOP_SINE 5
+#define sSetFrq 6
 
 unsigned int mainStatus =0; // main status
  // 0 for initialization
@@ -116,6 +117,12 @@ unsigned char command_index =0;
 float DAC_LSB;	// mVolts
 float DAC_voltage;
 
+char ADC_lo_byte;
+char ADC_hi_byte;
+unsigned int A2D_reading;
+unsigned int A2D_temp;
+unsigned int nA2Dsamples;
+
 void setup_ports(void)
 {
  PORTB = 0;				// Initialise ports
@@ -131,6 +138,16 @@ void setup_ports(void)
  // TRISC1=0; // 0 output
  // RC1=1;
  PSPMODE = 0;     // set this or PORTD only read at power on or reset!
+ 
+ 
+ ADCON0 = 0x41; // ADCS1=0,ADCS0=1 and ADCS2=0 (in ADCON1), channel AN0 selected.
+
+//												hi byte ADRESH    lo byte ADRESL
+ ADCON1 = 0x8E; // 0x8D selects justification   X X X X X X 9 8   7 6 5 4 3 2 1 0
+				// A2D AN0 External 2.5 volt reference to AN3, AN2 is ref low.
+				// ADCS2=0
+
+
 }
 
 /*
@@ -174,7 +191,7 @@ switch (command[0])
 				if(DAC_value >4095)
 				 {
 				  DAC_value = 4095;
-				  printf("\r\nlimit DAC to 4095");
+				  printf("\nlimit DAC to 4095\n");
 				}
 			 	command_index = 0;
 			 	cmdType=0x64;
@@ -209,14 +226,36 @@ switch (command[0])
 			break;
     */
 		 	 case 'f':
-		 		   DAC_read_data[0] = command[1];
-		 		   DAC_read_data[1] = command[2];
-		 		   DAC_read_data[2] = command[3];
-		 		   DAC_read_data[3] = command[4];
-		 		   sinefrq = atoi(DAC_read_data);
-		 	    	command_index = 0;
+			 	 if (command_index==5) // 'fxxxx'
+		 		   { 
+				    DAC_read_data[1] = command[2];
+					DAC_read_data[2] = command[3];
+					DAC_read_data[3] = command[4];
+					if (command[1]=='+')
+					{
+						DAC_read_data[0] = 0;
+						A2D_temp=atoi(DAC_read_data);
+						sinefrq = sinefrq+10; //A2D_temp;
+						printf("\n%d+%d\n", A2D_temp);
+		 	    	}
+					else if (command[1]=='-')
+					{
+						DAC_read_data[0] = 0;
+						sinefrq = sinefrq-atoi(DAC_read_data);
+						printf("-###\n");
+		 	    	}
+					else
+					{
+					    DAC_read_data[0] = command[1];
+						sinefrq=atoi(DAC_read_data);
+					}
+					command_index = 0;
 					cmdType='f';
-					break;
+					}
+				 else
+					{cmdType=0;
+					}
+				 break;
 			 case 0x61:	//a
 			// read_A2D();
 			command_index = 0;
@@ -234,7 +273,7 @@ switch (command[0])
 				if(sineamp >100)
 				 {
 				  sineamp = 0;
-				  printf("\r\nlimit max amplitude to 100 ");
+				  printf("\r\nlimit to 100");
 				}
 			 	command_index = 0;
 			   cmdType=command[0];
@@ -270,6 +309,10 @@ PSA=0; //0 assign prescaler to TMR0
 PS0=1;
 PS1=0;
 PS2=0;
+	TMR0=TMR0_sinefrq;
+//	TMR0=125;
+
+
 	T0CS=0; // Timer increments on instruction clock
 	T0IE=1; // enable interrupt on TMR0 overflow
 	INTEDG=0; // falling edge trigger the interrupt
@@ -289,7 +332,8 @@ void interrupt isr(void)
 		// TMR0=130;  // reset TMR0=130 gives an interrupt rate of 8ms at 4MHz osc
 		// TMR0=224; // 224, PS=000 at 4MHz osc give 240Hz Sine wave, but serial does not work
 		            // 200, PS=000 at 4MHz osc give 228Hz Sine wave, but serial works, but with strange characters
-		TMR0=196; // 196, PS=000 at 4MHz osc give 218Hz Sine wave, but serial works, but with strange characters
+		// TMR0=196; // 196, PS=000 at 4MHz osc give 218Hz Sine wave, but serial works, but with strange characters
+		 TMR0=TMR0_sinefrq;
 		T0IF=0;
 	//	if (mainStatus==sGENSINE||mainStatus==sSLOWSTART_SINE || mainStatus==sSLOWSTOP_SINE) //2,
 		{
@@ -341,7 +385,7 @@ void interrupt isr(void)
 				goto dacout;
 				} // end of if sSLOWSTOP_SINE
 
-			if (mainStatus==sGENSINE)
+			if (mainStatus==sGENSINE||mainStatus==sSetFrq)
 			{
 dacout:
 			DAC_hi=(unsigned char) (DAC_value>>8);
@@ -460,26 +504,50 @@ void main(void)
 	// printf("\r\RS232 serial comms 9600 no parity Xon Xoff \r\n");
 	// printf("\r\Two channels of PWM control currently at 25 and 75 percent ON\r\n "); 
 	//printf("\rPWMs set at 25 and 75 percent ON\r\n");       
-	 printf("\r\n sine Generator by X.Dai, J.Bowles v2\r\n");
-printf("Command format \r\n");
-printf("s## = start sine wave with amplitude ## percentage of full sacle\r\n");
+	 printf("\r\n sine Generator by X.Dai, J.Bowles v3\r\n");
+// printf("Command format \r\n");
+     printf("s## = start sine wave with amplitude ##\n");
+	 printf("sf[+|-|#]### set sinefrq\n");
 // printf("t = stopt sine wave \r\n");
 // printf("stop before adjust the amplitude\r\n");
 
 	// display_options();
-	TMR0=125;
+//	TMR0=125;
+//	i=(unsigned char)eeromaddr_sinefrq;
+	// sinefrq=eeprom_read_int(i);
+//	sinefrq=(unsigned int)(eeprom_read(i)) | ((unsigned int)((unsigned int)(eeprom_read(i+1))<<8));
+	
+
+	EEADR=eeromaddr_sinefrq;
+	EEPGD=0;
+	RD=1;
+	sinefrq=(unsigned char)EEDATA;
+	// sinefrq=sinefrq<<8;
+	// EEADR=eeromaddr_sinefrq;
+	// EEPGD=0;
+	// RD=1;
+	// i=(unsigned char)EEDATA;
+	// sinefrq=sinefrq+i;
+	i=eeromaddr_sinefrq;
+	eeprom_write_int(i, sinefrq);
+	
+	if (sinefrq>200)
+		TMR0_sinefrq=200;
+	else
+		TMR0_sinefrq=sinefrq;
 	ntimer0=0;
 	init_interrupt();
 	mainStatus=sIDLE; // 1;
+	printf("sinefrq=%d, TMR0_sinefrq=%d\n",sinefrq,TMR0_sinefrq);
 while(TRUE)
    {	RC1=!RC0; // use RC0 to control the sine on/off in sGENSINE
 	  // getch_timeout_temp=getch_timeout();
 		if (RCIF)
 			{
-				getch_timeout_temp=RCREG;
+				// getch_timeout_temp=RCREG;
 				// a char is received
-				command[command_index] = getch_timeout_temp;
-				printf("%c",command[command_index]);	// echo it back
+				command[command_index] = RCREG;
+				// printf("%c",command[command_index]);	// echo it back
 				command_index++;
 				cmdType=processCmd();
 				      	   // printf("\r\ncmdType=%c, %d ", cmdType, cmdType);
@@ -525,14 +593,35 @@ while(TRUE)
         	       nSineCycles=1;
         	       mainStatus=sSLOWSTART_SINE;
         	       // mainStatus=sGENSINE;
-        	       printf("...done, s=%d,cycles=%d\r\n", mainStatus,nSineCycles);
+				   printf("OK\n");
+        	      // printf("...done, s=%d,cycles=%d\r\n", mainStatus,nSineCycles);
         	    	// mainStatus=sGENSINE;
         	     }
         	    if (cmdType=='f')
         	    {
 
-i=eeromaddr_sinefrq;
+				   i=eeromaddr_sinefrq;
         	 	   eeprom_write_int((unsigned char)i,(unsigned int)sinefrq);
+				   TMR0_sinefrq=sinefrq&0x00FF;
+				   	// printf("TMR0_sinefrq=%d\n",TMR0_sinefrq);
+						
+					// check the sinefrq in EEROM 
+					EEADR=eeromaddr_sinefrq;
+					// eeprom_read_int((unsigned char)i,(unsigned int)sinefrq);
+				   	EEPGD=0;
+					RD=1;
+					A2D_temp=(unsigned char)EEDATA;
+				    printf("\n sinefrq=%d",A2D_temp);
+	
+				//	A2D_temp=(A2D_temp<<8) & 0xFF00;
+				//	EEADR=eeromaddr_sinefrq+1;
+				//	EEPGD=0;
+				//	RD=1;
+				//	i=(unsigned char)EEDATA;
+				//	printf("+ %d = ",i);
+				//	A2D_temp=A2D_temp+i;
+				//	printf("%d\n",A2D_temp);
+	
         	 	   // then caculate the correct TMR0 and PS0, 1, 2 (a lookup table)
         	    	// unsigned char TMR0_sinefrq;
         	    	// bit PS0_sinefrq;
