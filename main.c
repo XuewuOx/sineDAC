@@ -5,7 +5,8 @@
 #include	<ctype.h>
 #include "math.h"
 
- #include "sineDAC.h"
+ #include "uartcomm.h"
+// #include "sineDAC.h"
 // #include "delay.h"
 
 // #include	"always.h"
