@@ -179,10 +179,12 @@ unsigned char cmdType;
 switch (command[0])
 		{
 		 case 0x64: //d
+			 /*
 			 if (command_index==5) // 'dxxxx'
-			 { // all 5 char received in the format of 'dxxxx'
-				 //printf("\n\rAdjusting DAC\r\n");
-	 		//	printf("received cmd %c %d\r\n", command[0], command[0]);
+			 {
+			     // all 5 char received in the format of 'dxxxx'
+				//printf("\n\rAdjusting DAC\r\n");
+	 		    //	printf("received cmd %c %d\r\n", command[0], command[0]);
                 DAC_read_data[0] = command[1];
 	 			DAC_read_data[1] = command[2];
 				DAC_read_data[2] = command[3];
@@ -199,6 +201,10 @@ switch (command[0])
 			 else
 			 {cmdType=0;
 				 }
+			*/	 
+			printf("\nd#### is not supported. IGNORED\n");	 
+			command_index = 0;
+			cmdType=0;
 			break;
 		      
 	/*	 case 0x69: //i
@@ -226,29 +232,34 @@ switch (command[0])
 			break;
     */
 		 	 case 'f':
-			 	 if (command_index==5) // 'fxxxx'
+			 	 if (command_index==5) // 'f[+|-|#]###'
 		 		   { 
 				    DAC_read_data[1] = command[2];
 					DAC_read_data[2] = command[3];
 					DAC_read_data[3] = command[4];
 					if (command[1]=='+')
 					{
-						DAC_read_data[0] = 0;
-						A2D_temp=atoi(DAC_read_data);
-						sinefrq = sinefrq+10; //A2D_temp;
-						printf("\n%d+%d\n", A2D_temp);
+						DAC_read_data[0] = '0';
+					//	printf("\n%d+%d\n", sinefrq,A2D_temp);
+						sinefrq = sinefrq+atoi(DAC_read_data); //A2D_temp;
 		 	    	}
 					else if (command[1]=='-')
 					{
-						DAC_read_data[0] = 0;
+						DAC_read_data[0] = '0';
+					//	printf("\n%d-%d\n", sinefrq,A2D_temp);
 						sinefrq = sinefrq-atoi(DAC_read_data);
-						printf("-###\n");
 		 	    	}
 					else
 					{
 					    DAC_read_data[0] = command[1];
 						sinefrq=atoi(DAC_read_data);
 					}
+					// update the TMR0 according new sinefrq
+					if (sinefrq>200)
+						sinefrq=200;
+
+					TMR0_sinefrq=sinefrq;
+					// printf("TMR0=%d\n", TMR0_sinefrq);
 					command_index = 0;
 					cmdType='f';
 					}
@@ -263,12 +274,14 @@ switch (command[0])
 			break;
 
 		 case 0x73: //s, start
-			if (command_index==3) // 'dxxxx'
-			 { // all 3 char received in the format of 'dxxxx'
+			if (command_index==3) // 's##'
+			 { // all 3 char received in the format of 's###'
 				 //printf("\n\rAdjusting DAC\r\n");
 	 		//	printf("received cmd %c %d\r\n", command[0], command[0]);
                 DAC_read_data[0] = command[1];
 	 			DAC_read_data[1] = command[2];
+				DAC_read_data[2]=0;
+				DAC_read_data[3]=0;
 				sineamp = atoi(DAC_read_data);
 				if(sineamp >100)
 				 {
@@ -506,8 +519,10 @@ void main(void)
 	//printf("\rPWMs set at 25 and 75 percent ON\r\n");       
 	 printf("\r\n sine Generator by X.Dai, J.Bowles v3\r\n");
 // printf("Command format \r\n");
-     printf("s## = start sine wave with amplitude ##\n");
+     printf("s##  start sine wave with amplitude ##\n");
+	 printf("t    start sine wave with amplitude ##\n");
 	 printf("sf[+|-|#]### set sinefrq\n");
+	 
 // printf("t = stopt sine wave \r\n");
 // printf("stop before adjust the amplitude\r\n");
 
@@ -528,13 +543,12 @@ void main(void)
 	// RD=1;
 	// i=(unsigned char)EEDATA;
 	// sinefrq=sinefrq+i;
-	i=eeromaddr_sinefrq;
-	eeprom_write_int(i, sinefrq);
 	
-	if (sinefrq>200)
-		TMR0_sinefrq=200;
-	else
-		TMR0_sinefrq=sinefrq;
+	// i=eeromaddr_sinefrq;
+	// eeprom_write_int(i, sinefrq);
+	
+	if (sinefrq>200) sinefrq=200;
+	TMR0_sinefrq=sinefrq;
 	ntimer0=0;
 	init_interrupt();
 	mainStatus=sIDLE; // 1;
@@ -599,30 +613,24 @@ while(TRUE)
         	     }
         	    if (cmdType=='f')
         	    {
-
+					// save sinefrq into EEROM
 				   i=eeromaddr_sinefrq;
         	 	   eeprom_write_int((unsigned char)i,(unsigned int)sinefrq);
-				   TMR0_sinefrq=sinefrq&0x00FF;
-				   	// printf("TMR0_sinefrq=%d\n",TMR0_sinefrq);
+				   // check the sinefrq in EEROM 
+				   // TODO: eeprom_read_int() is used in intterupt_isr and not allowed re-entrence
+				   //       have to manually readback
+				   //   /* eeprom_read_int((unsigned char)i,(unsigned int)sinefrq);
+				   //   */
+				   //	  EEADR=eeromaddr_sinefrq;
+				   //	  EEPGD=0;
+				   //	  RD=1;
+				   //	  A2D_temp=(unsigned char)EEDATA;
+				   //      printf("\n sinefrq@EEROM=%d",A2D_temp);
+					TMR0_sinefrq=sinefrq&0x00FF;
+				   	printf("\nSave new TMR0_sinefrq=%d\n",TMR0_sinefrq);
 						
-					// check the sinefrq in EEROM 
-					EEADR=eeromaddr_sinefrq;
-					// eeprom_read_int((unsigned char)i,(unsigned int)sinefrq);
-				   	EEPGD=0;
-					RD=1;
-					A2D_temp=(unsigned char)EEDATA;
-				    printf("\n sinefrq=%d",A2D_temp);
-	
-				//	A2D_temp=(A2D_temp<<8) & 0xFF00;
-				//	EEADR=eeromaddr_sinefrq+1;
-				//	EEPGD=0;
-				//	RD=1;
-				//	i=(unsigned char)EEDATA;
-				//	printf("+ %d = ",i);
-				//	A2D_temp=A2D_temp+i;
-				//	printf("%d\n",A2D_temp);
-	
-        	 	   // then caculate the correct TMR0 and PS0, 1, 2 (a lookup table)
+				
+				    // then caculate the correct TMR0 and PS0, 1, 2 (a lookup table)
         	    	// unsigned char TMR0_sinefrq;
         	    	// bit PS0_sinefrq;
         	    	// bit PS1_sinefrq;
@@ -675,6 +683,9 @@ while(TRUE)
 				{ // stop cmd, simply set the mainStatus to sIDLE
         	      //	printf("\r\nreceived cmd t. Stop sine wave \r\n");
                    // mainStatus=sGENSINE;
+				   i=eeromaddr_sinefrq;
+        	 	   eeprom_write_int((unsigned char)i,(unsigned int)sinefrq);
+				   
 				   RC1=1;
         	       nSineCycles=1;
   				   RB6=0x0;
