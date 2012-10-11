@@ -522,7 +522,7 @@ void main(void)
 // printf("Command format \r\n");
      printf("s##  start sine wave with amplitude ##%% \n");
 	 printf("t    stop sine wave and save sinefrq to EEROM\n");
-	 printf("sf[+|-|#]### set sinefrq\n");
+	 printf("f[+|-|#]### set sinefrq\n");
 	 
 // printf("t = stopt sine wave \r\n");
 // printf("stop before adjust the amplitude\r\n");
