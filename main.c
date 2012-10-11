@@ -517,10 +517,11 @@ void main(void)
 	// printf("\r\RS232 serial comms 9600 no parity Xon Xoff \r\n");
 	// printf("\r\Two channels of PWM control currently at 25 and 75 percent ON\r\n "); 
 	//printf("\rPWMs set at 25 and 75 percent ON\r\n");       
-	 printf("\r\n sine Generator by X.Dai, J.Bowles v3\r\n");
+	 printf("\n\n      Slow Start Current Driver (v3)\n");
+	 printf(" by X.Dai, S.Russell, S.Sheard and J.Bowles\n\n");
 // printf("Command format \r\n");
-     printf("s##  start sine wave with amplitude ##\n");
-	 printf("t    start sine wave with amplitude ##\n");
+     printf("s##  start sine wave with amplitude ##%% \n");
+	 printf("t    stop sine wave and save sinefrq to EEROM\n");
 	 printf("sf[+|-|#]### set sinefrq\n");
 	 
 // printf("t = stopt sine wave \r\n");
@@ -552,7 +553,7 @@ void main(void)
 	ntimer0=0;
 	init_interrupt();
 	mainStatus=sIDLE; // 1;
-	printf("sinefrq=%d, TMR0_sinefrq=%d\n",sinefrq,TMR0_sinefrq);
+	printf("\nsinefrq=%d, TMR0_sinefrq=%d\n",sinefrq,TMR0_sinefrq);
 while(TRUE)
    {	RC1=!RC0; // use RC0 to control the sine on/off in sGENSINE
 	  // getch_timeout_temp=getch_timeout();
@@ -607,7 +608,7 @@ while(TRUE)
         	       nSineCycles=1;
         	       mainStatus=sSLOWSTART_SINE;
         	       // mainStatus=sGENSINE;
-				   printf("OK\n");
+				   // printf("OK\n");
         	      // printf("...done, s=%d,cycles=%d\r\n", mainStatus,nSineCycles);
         	    	// mainStatus=sGENSINE;
         	     }
