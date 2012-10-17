@@ -555,7 +555,7 @@ void main(void)
 	mainStatus=sIDLE; // 1;
 	printf("\nsinefrq=%d, TMR0_sinefrq=%d\n",sinefrq,TMR0_sinefrq);
 while(TRUE)
-   {	RC1=!RC0; // use RC0 to control the sine on/off in sGENSINE
+   {	// RC1=!RC0; // use RC0 to control the sine on/off in sGENSINE
 	  // getch_timeout_temp=getch_timeout();
 		if (RCIF)
 			{
